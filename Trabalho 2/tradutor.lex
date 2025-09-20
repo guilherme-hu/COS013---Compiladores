@@ -12,11 +12,13 @@ int token;
 void S();
 void C();
 void A();
-void U();
 void E();
 void T();
 void P();
+void U();
+void Fat();
 void F();
+void Arg();
 
 void casa( int );
 void print( string );
@@ -31,6 +33,11 @@ map<int,string> nome_tokens = {
   { f_print, "função print" },
 };
 
+map<string,string> nome_funcoes = {
+  { "max", "max" },
+  { "dtos", "double to string" }
+};
+
 string lexema;
 %}
 
@@ -40,14 +47,15 @@ D	[0-9]
 L	[A-Za-z_]
 
 NUM	    {D}+(\.{D}+)?([eE][+\-]?{D}+)?
-ID      ({L}|[\$])({L}|{D})*
+ID      ({L})({L}|{D})*
 STRING  \"(\\\"|\"\"|[^"])*\"
+PRINT   [Pp][Rr][Ii][Nn][Tt]
 
 %%
 
 {WS}  		{ }
 
-"print"     { lexema = yytext; return f_print; }
+{PRINT}     { lexema = yytext; return f_print; }
 
 {NUM} 		{ lexema = yytext; return tk_num; }
 
@@ -55,7 +63,7 @@ STRING  \"(\\\"|\"\"|[^"])*\"
 
 {STRING} 	{ lexema = yytext; return tk_str; }
 
-.		    { return yytext[0]; }
+.		    { lexema = yytext; return yytext[0]; }
 
 %%
 
@@ -82,7 +90,7 @@ void print(string s) {
 }
 
 void erro(string s) {
-    cout << s << endl;
+    cout << endl << "Erro: " << s << endl;
     exit(1);
 }
 
@@ -96,7 +104,7 @@ void casa( int esperado ) {
   }
 }
 
-void S() {
+void S() { // Expressões gerais
   C();
   if (token != 0) S();
 }
@@ -109,8 +117,8 @@ void C() {
              break;
            
     case f_print: token = next_token();
-             U();
-             cout << "print #";
+             E();
+             print("print #");
              casa( ';' );
              break;
   }
@@ -122,15 +130,8 @@ void A() { // atribuição
   casa( tk_id );
   print( temp );
   casa( '=' );
-  U();
+  E();
   print( "=" );
-}
-
-void U(){ // unário
-    switch( token ) {
-      case '-' : casa( '-' ); print("0"); E(); print( "-" ); break;
-      default: E(); break; // epsilon
-    }
 }
 
 void E() { // soma e subtração
@@ -161,21 +162,53 @@ void T() { // multiplicação e divisão
 }
 
 void P() { // potência
-  
-  while( 1 ) 
+    U();
+
     switch( token ) {
-      case '^' : casa( '^' ); F(); print( "^"); break;
-     
-      default: F(); return; // epsilon
+      case '^' : casa( '^' ); P(); print( "power #"); break;
+      default: return; // epsilon
     }
 }
 
+void U(){ // unário
+    switch( token ) {
+      case '-' : casa( '-' ); print("0"); Fat(); print( "-" ); break;
+      case '+' : casa( '+' ); Fat(); break;
+      default: Fat(); 
+    }
+}
+
+void Fat(){ // Fatorial
+    F();
+    switch( token ) {
+      case '!' : casa( '!' ); print( "fat #"); break;
+      default: return; // epsilon
+    }
+}   
+
+
 void F() { // elemento
   switch( token ) {
+    
     case tk_id : {
       string temp = lexema;
-      casa( tk_id ); print( temp + " @" ); } 
-      break;
+      casa( tk_id );  
+    
+      switch( token ){
+        case '(' : 
+          casa( '(' );
+          if ( nome_funcoes.find( temp ) != nome_funcoes.end() ){
+              Arg(); 
+              casa( ')' );
+              print( temp + " #" );
+          }
+          else erro("Função inexistente");
+          break;
+        default: print( temp + " @" );
+      }
+    }
+    break;
+
     case tk_num : {
       string temp = lexema;
       casa( tk_num ); print( temp ); }
@@ -187,8 +220,19 @@ void F() { // elemento
     case '(': 
       casa( '(' ); E(); casa( ')' ); break;
     default:
-      erro( "Operando esperado, encontrado " + lexema );
+      erro( "Operando esperado, encontrado: " + lexema );
   }
+}
+
+void Arg(){
+  E();
+  
+  while( 1 ) 
+    switch( token ) {
+      case ',' : casa( ',' ); E(); print( " " ); break;
+      
+      default: return; // epsilon
+    }
 }
 
 
