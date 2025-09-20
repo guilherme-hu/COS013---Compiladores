@@ -14,8 +14,8 @@ void C();
 void A();
 void E();
 void T();
-void P();
 void U();
+void P();
 void Fat();
 void F();
 void Arg();
@@ -149,32 +149,33 @@ void E() { // soma e subtração
 
 
 void T() { // multiplicação e divisão
-  P();
+  U();
   
   while( 1 ) 
     switch( token ) {
-      case '*' : casa( '*' ); P(); print( "*"); break;
+      case '*' : casa( '*' ); U(); print( "*"); break;
       
-      case '/' : casa( '/' ); P(); print( "/" ); break;
+      case '/' : casa( '/' ); U(); print( "/" ); break;
       
       default: return; // epsilon
+    }
+}
+
+
+void U(){ // unário
+    switch( token ) {
+      case '-' : casa( '-' ); print("0"); U(); print( "-" ); break;
+      case '+' : casa( '+' ); U(); break;
+      default: P(); 
     }
 }
 
 void P() { // potência
-    U();
+    Fat();
 
     switch( token ) {
       case '^' : casa( '^' ); P(); print( "power #"); break;
       default: return; // epsilon
-    }
-}
-
-void U(){ // unário
-    switch( token ) {
-      case '-' : casa( '-' ); print("0"); Fat(); print( "-" ); break;
-      case '+' : casa( '+' ); Fat(); break;
-      default: Fat(); 
     }
 }
 
@@ -197,12 +198,9 @@ void F() { // elemento
       switch( token ){
         case '(' : 
           casa( '(' );
-          if ( nome_funcoes.find( temp ) != nome_funcoes.end() ){
-              Arg(); 
-              casa( ')' );
-              print( temp + " #" );
-          }
-          else erro("Função inexistente");
+          Arg(); 
+          casa( ')' );
+          print( temp + " #" );
           break;
         default: print( temp + " @" );
       }
