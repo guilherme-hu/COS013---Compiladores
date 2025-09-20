@@ -33,11 +33,6 @@ map<int,string> nome_tokens = {
   { f_print, "função print" },
 };
 
-map<string,string> nome_funcoes = {
-  { "max", "max" },
-  { "dtos", "double to string" }
-};
-
 string lexema;
 %}
 
