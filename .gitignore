@@ -1,0 +1,7 @@
+.vscode/
+main
+lex.yy
+main.c
+lex.yy.c
+*.exe
+*.o

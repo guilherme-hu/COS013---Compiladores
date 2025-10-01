@@ -1,0 +1,2 @@
+cd /mnt/c/Users/guilh/OneDrive/VScode/Compiladores
+
