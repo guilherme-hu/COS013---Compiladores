@@ -1,1 +1,2 @@
-x^2
+let d; let c = d = 8; 
+c = 1; d = 'Hello';

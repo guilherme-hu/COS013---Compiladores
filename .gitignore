@@ -5,3 +5,10 @@ main.c
 lex.yy.c
 *.exe
 *.o
+
+/mdp
+/Trabalho 3/bait/
+/Trabalho 3/codigo
+/Trabalho 3/lex.yy.c
+/Trabalho 3/y.tab.c
+/Trabalho 3/mini_js

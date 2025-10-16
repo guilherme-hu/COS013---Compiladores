@@ -1,2 +1,2 @@
-cd /mnt/c/Users/guilh/OneDrive/VScode/Compiladores
+cd /mnt/c/Users/guilh/OneDrive/VScode/Compiladores/'Trabalho 3' 
 

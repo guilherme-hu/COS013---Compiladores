@@ -106,7 +106,7 @@ void S() { // Expressões gerais
 
 void C() {
   switch( token ) {
-    case tk_id: A();
+    case tk_id: A(); 
              casa( ';' );
              print(" ^");
              break;
