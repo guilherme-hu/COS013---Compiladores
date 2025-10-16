@@ -126,7 +126,8 @@ string define_label( string prefixo ) {
 void verifica_uso( Atributos atrib ){
   string nome_var = atrib.c[0];
   if (ts.count(nome_var) == 0){
-    fprintf( stderr, "Erro: a variável '%s' não foi declarada na linha %d, coluna %d.\n", nome_var.c_str(), atrib.linha, atrib.coluna );
+    fprintf( stderr, "Erro: a variável '%s' não foi declarada.\n", nome_var.c_str() );
+    // fprintf( stderr, "Erro: a variável '%s' não foi declarada na linha %d, coluna %d.\n", nome_var.c_str(), atrib.linha, atrib.coluna );
     exit(1);
   }
 }
@@ -177,9 +178,8 @@ CMDs : CMD CMDs { $$.c = $1.c + $2.c; };
 CMD : DECL ';'
     | E ';' { $$.c = $1.c + "^"; }
     | CMD_IF
-    /* 
-    | CMD_FOR
-    | CMD_WHILE */
+    //| CMD_FOR
+    | CMD_WHILE
     | PRINT E ';' { $$.c = $2.c + "println" + "#"; }
     | ';'
     ;
@@ -239,7 +239,7 @@ BLOCO : CMD
       | '{' CMDs '}' { $$.c = $2.c; }
       ;
 /* 
-CMD_FOR : FOR '(' SF ';' E ';' EF ')' CMD
+CMD_FOR : FOR '(' SF ';' E ';' EF ')' BLOCO
          { string teste_for = gera_label("teste_for");
            string fim_for = gera_label("fim_for");
 
@@ -259,9 +259,9 @@ EF : E {$$.c = $1.c + "^";}
 
 SF : DECL
    | EF
-   ;
+   ; */
 
-CMD_WHILE : WHILE '(' E ')' CMD
+CMD_WHILE : WHILE '(' E ')' BLOCO
            { string teste_while = gera_label("teste_while");
              string fim_while = gera_label("fim_while");
 
@@ -271,7 +271,7 @@ CMD_WHILE : WHILE '(' E ')' CMD
              teste_while + JUMP +                       // Volta para o início
              define_label(fim_while);                   // Fim do while
            }
-         ; */
+         ;
    
 LVALUE : ID { verifica_uso( $1 ); $$.c = $1.c; }
        ;
@@ -311,8 +311,10 @@ F : LVALUE { $$.c = $1.c + "@"; }
   | CSTRING
   | LVALUE MAIS_MAIS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+" + "=" + "^"; }
   | LVALUE MENOS_MENOS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
+  | '-' F     { $$.c = "0" + $2.c + "-"; } // unário -
+  | '+' F     { $$.c = $2.c; } // unário +
   | '(' E ')' { $$.c = $2.c; }
-  | '[' ']' { $$.c = vector<string>{"[]"};}
+  | '[' ']' { $$.c = vector<string>{"[]"}; }
   | '{' '}' { $$.c = vector<string>{"{}"}; }
   ;
   
