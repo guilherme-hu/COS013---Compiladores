@@ -14,6 +14,7 @@ STRING      (\"(\\\"|\"\"|[^"])*\")|\'(\\\'|\'\'|[^'])*\'
 "\t"       { coluna += 4; }
 " "        { coluna++; }
 "\n"       { linha++; coluna = 1; }
+"\r"       { linha++; coluna = 1; }
 
 {DOUBLE}   { return token( CDOUBLE ); }
 {INT}      { return token( CINT ); }

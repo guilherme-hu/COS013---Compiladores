@@ -176,7 +176,8 @@ CMDs : CMD CMDs { $$.c = $1.c + $2.c; };
 // ; faz parte do comando, bloco por exemplo não termina com ;
 CMD : DECL ';'
     | E ';' { $$.c = $1.c + "^"; }
-    /* | CMD_IF
+    | CMD_IF
+    /* 
     | CMD_FOR
     | CMD_WHILE */
     | PRINT E ';' { $$.c = $2.c + "println" + "#"; }
@@ -218,12 +219,12 @@ VAR_UM_ID : ID { $$ = declara_variavel( Var, $1 ); }
                       $$.c = $$.c + $1.c + $3.c + "=" + "^";}
           ;
 
-/* 
-CMD_IF : IF '(' E ')' CMD
+
+CMD_IF : IF '(' E ')' BLOCO
          { string fim_if = gera_label("fim_if");
-           $$.c = $3.c + "!" + fim_if  + "?" +$5.c + define_label(fim_if);
+           $$.c = $3.c + "!" + fim_if  + "?" + $5.c + define_label(fim_if);
          }
-       | IF '(' E ')' CMD ELSE CMD
+       | IF '(' E ')' BLOCO ELSE BLOCO
          { string fim_if = gera_label("fim_if");
            string else_if = gera_label("else");
 
@@ -234,6 +235,10 @@ CMD_IF : IF '(' E ')' CMD
          }
       ;
 
+BLOCO : CMD
+      | '{' CMDs '}' { $$.c = $2.c; }
+      ;
+/* 
 CMD_FOR : FOR '(' SF ';' E ';' EF ')' CMD
          { string teste_for = gera_label("teste_for");
            string fim_for = gera_label("fim_for");
@@ -277,9 +282,11 @@ LVALUEPROP : E '[' E ']' { $$.c = $1.c + $3.c; }
 
 // Operadores binários e atribuição
 E : LVALUE '=' E { verifica_uso( $1 ); $$.c = $1.c + $3.c + "="; }
-  | LVALUEPROP '=' E { if ( $1.c.size() == 1 ) verifica_uso( $1 ); $$.c = $1.c + $3.c + "[=]"; }
-  | E MAIS_IGUAL E { $$.c = $1.c + $3.c + "+="; }
-  | E MENOS_IGUAL E { $$.c = $1.c + $3.c + "-="; }
+  | LVALUEPROP '=' E { verifica_uso( $1 ); $$.c = $1.c + $3.c + "[=]"; }
+  | LVALUE MAIS_IGUAL E     { verifica_uso( $1 ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
+  | LVALUE MENOS_IGUAL E    { verifica_uso( $1 ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
+  | LVALUEPROP MAIS_IGUAL E { $$.c = $1.c + $1.c + "[@]" + $3.c + "+" + "[=]"; }  // a[i] += e  => a[i] a[i] [@] e + [=]
+  | LVALUEPROP MENOS_IGUAL E{ $$.c = $1.c + $1.c + "[@]" + $3.c + "-" + "[=]"; }  // a[i] -= e  => a[i] a[i] [@] e - [=]
   | E '<' E { $$.c = $1.c + $3.c + "<"; }
   | E '>' E { $$.c = $1.c + $3.c + ">"; }
   | E ME_IG E { $$.c = $1.c + $3.c + "<="; }
@@ -302,8 +309,8 @@ F : LVALUE { $$.c = $1.c + "@"; }
   | CDOUBLE
   | CINT
   | CSTRING
-  | LVALUE MAIS_MAIS {$$.c = $1.c + "@" + $1.c + "@" + "1" + "+" + "=";}
-  | LVALUE MENOS_MENOS {$$.c = $1.c + "@" + $1.c + "@" + "1" + "-" + "=";} 
+  | LVALUE MAIS_MAIS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+" + "=" + "^"; }
+  | LVALUE MENOS_MENOS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
   | '(' E ')' { $$.c = $2.c; }
   | '[' ']' { $$.c = vector<string>{"[]"};}
   | '{' '}' { $$.c = vector<string>{"{}"}; }

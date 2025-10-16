@@ -1,2 +1,8 @@
-let d; let c = d = 8; 
-c = 1; d = 'Hello';
+let a = "ABA", c = 'CATE', resultado;
+ if( a < c ) 
+{
+  resultado = "a vem antes de c: ";
+  resultado += a + '<' + c ;
+}
+else
+  resultado = "Deu ruim!";
