@@ -181,7 +181,7 @@ CMDs : CMD CMDs { $$.c = $1.c + $2.c; };
 CMD : DECL ';'
     | E ';' { $$.c = $1.c + "^"; }
     | CMD_IF
-    //| CMD_FOR
+    | CMD_FOR
     | CMD_WHILE
     | PRINT E ';' { $$.c = $2.c + "println" + "#"; }
     | ';' { $$.clear(); } // comando vazio
@@ -241,13 +241,14 @@ CMD_IF : IF '(' E ')' BLOCO
 BLOCO : CMD
       | '{' CMDs '}' { $$.c = $2.c; }
       ;
-/* 
+
 CMD_FOR : FOR '(' SF ';' E ';' EF ')' BLOCO
          { string teste_for = gera_label("teste_for");
            string fim_for = gera_label("fim_for");
 
-           $$.c = $3.c + define_label(teste_for) +   // Início do for            
-           $5.c + "!" + fim_for + JUMP_TRUE +        // jump
+           $$.c = $3.c +                             // Atribuição inicial           
+           define_label(teste_for) + $5.c +          // Teste do for
+           "!" + fim_for + JUMP_TRUE +               // jump
            $9.c +                                    // Comando
            $7.c +                                    // Efeitos
            teste_for + JUMP +                        // Volta para o início
@@ -262,7 +263,7 @@ EF : E {$$.c = $1.c + "^";}
 
 SF : DECL
    | EF
-   ; */
+   ;
 
 CMD_WHILE : WHILE '(' E ')' BLOCO
            { string teste_while = gera_label("teste_while");

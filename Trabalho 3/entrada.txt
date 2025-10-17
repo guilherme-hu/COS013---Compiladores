@@ -1,5 +1,6 @@
-let a = 4, b = 5, c, d;
-if( a++ > b )
-  c = "a e' maior"
-      + "!";
 
+let a = {}, campo = "c";
+
+for( let i = 0; i < 6; i = i + 2 ) {
+  a[campo = campo + i] = i;
+};
