@@ -74,7 +74,8 @@ Atributos declara_variavel( TipoDecl decl, Atributos atrib ){
   if (decl == Var){
     if (ts.count(nome_var) > 0){
       if (ts[nome_var].tipo != Var){
-        yyerror("Variável já declarada com let ou var");
+         cerr <<  "Erro: a variável '" << nome_var << "' ja foi declarada na linha " << ts[nome_var].linha << "." << endl;
+         exit(1);
       }
       else {
         atrib.c.clear();
@@ -83,8 +84,10 @@ Atributos declara_variavel( TipoDecl decl, Atributos atrib ){
     }
   }
   else if (ts.count(nome_var) > 0){
-    yyerror("Variável já declarada");
+    cerr << "Erro: a variável '" << nome_var << "' ja foi declarada na linha " << ts[nome_var].linha << "." << endl;
+    exit(1);
   }
+  
   ts[nome_var].linha = atrib.linha;
   ts[nome_var].coluna = atrib.coluna;
   ts[nome_var].tipo = decl;
@@ -123,21 +126,23 @@ string define_label( string prefixo ) {
   return ":" + prefixo;
 }
 
-void verifica_uso( Atributos atrib ){
-  string nome_var = atrib.c[0];
-  if (ts.count(nome_var) == 0){
-    fprintf( stderr, "Erro: a variável '%s' não foi declarada.\n", nome_var.c_str() );
-    // fprintf( stderr, "Erro: a variável '%s' não foi declarada na linha %d, coluna %d.\n", nome_var.c_str(), atrib.linha, atrib.coluna );
-    exit(1);
-  }
-}
+void checa_simbolo( string nome, bool modificavel ) {
+  // for( int i = ts.size() - 1; i >= 0; i-- ) {  
+  //   auto& atual = ts[i];
+    
+    if( ts.count( nome ) > 0 ) {
+      if( modificavel && ts[nome].tipo == Const ) {
+        cerr << "Erro: tentativa de modificar uma variável constante ('" << nome << "')." << endl;
+        exit( 1 );     
+      }
+      else 
+        return;
+    }
+  // }
 
-void verifica_const( Atributos atrib ){
-  string nome_var = atrib.c[0];
-    if (ts.count(nome_var) > 0 && ts[nome_var].tipo == Const){
-    fprintf( stderr, "Erro: tentativa de modificar uma variável constante ('%s') na linha %d.\n", nome_var.c_str(), atrib.linha );
-    exit(1);
-  }
+  cerr << "Erro: a variável '" << nome << "' não foi declarada." << endl;
+  // fprintf( stderr, "Erro: a variável '%s' não foi declarada na linha %d, coluna %d.\n", nome_var.c_str(), atrib.linha, atrib.coluna );
+  exit( 1 );     
 }
 
 // verifica_se_existe
@@ -276,8 +281,8 @@ CMD_WHILE : WHILE '(' E ')' BLOCO
              define_label(fim_while);                   // Fim do while
            }
          ;
-   
-LVALUE : ID { verifica_uso( $1 ); $$.c = $1.c; }
+
+LVALUE : ID { checa_simbolo( $1.c[0], false ); $$.c = $1.c; }
        ;
 
 LVALUEPROP : E '[' E ']' { $$.c = $1.c + $3.c; }
@@ -285,14 +290,14 @@ LVALUEPROP : E '[' E ']' { $$.c = $1.c + $3.c; }
            ;
 
 // Operadores binários e atribuição
-E : LVALUE { $$.c = $1.c + "@"; } 
-  | LVALUEPROP { $$.c = $1.c + "[@]"; }
-  | LVALUE '=' E { verifica_uso( $1 ); $$.c = $1.c + $3.c + "="; }
-  | LVALUEPROP '=' E { verifica_uso( $1 ); $$.c = $1.c + $3.c + "[=]"; }
-  | LVALUE MAIS_IGUAL E     { verifica_uso( $1 ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
-  | LVALUE MENOS_IGUAL E    { verifica_uso( $1 ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
-  | LVALUEPROP MAIS_IGUAL E { $$.c = $1.c + $1.c + "[@]" + $3.c + "+" + "[=]"; }  // a[i] += e  => a[i] a[i] [@] e + [=]
-  | LVALUEPROP MENOS_IGUAL E{ $$.c = $1.c + $1.c + "[@]" + $3.c + "-" + "[=]"; }  // a[i] -= e  => a[i] a[i] [@] e - [=]
+E : LVALUE { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "@"; } 
+  | LVALUEPROP { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "[@]"; }
+  | LVALUE '=' E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $3.c + "="; }
+  | LVALUEPROP '=' E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $3.c + "[=]"; }
+  | LVALUE MAIS_IGUAL E     { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
+  | LVALUE MENOS_IGUAL E    { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
+  | LVALUEPROP MAIS_IGUAL E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "+" + "[=]"; }  // a[i] += e  => a[i] a[i] [@] e + [=]
+  | LVALUEPROP MENOS_IGUAL E{ checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "-" + "[=]"; }  // a[i] -= e  => a[i] a[i] [@] e - [=]
   | E '<' E { $$.c = $1.c + $3.c + "<"; }
   | E '>' E { $$.c = $1.c + $3.c + ">"; }
   | E ME_IG E { $$.c = $1.c + $3.c + "<="; }
@@ -320,8 +325,10 @@ P : MAIS_MAIS LVALUEPROP{$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+"}
 F : CDOUBLE
   | CINT
   | CSTRING
-  | LVALUE MAIS_MAIS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+" + "=" + "^"; }
-  | LVALUE MENOS_MENOS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
+  | LVALUE MAIS_MAIS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+" + "=" + "^"; }
+  | LVALUE MENOS_MENOS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
+  | LVALUEPROP MAIS_MAIS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "[@]" + $1.c + $1.c + "[@]" + "1" + "+" + "[=]" + "^"; }
+  | LVALUEPROP MENOS_MENOS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "[@]" + $1.c + $1.c + "[@]" + "1" + "-" + "[=]" + "^"; }
   | '(' E ')' { $$.c = $2.c; }
   | '[' ']' { $$.c = vector<string>{"[]"}; }
   | '{' '}' { $$.c = vector<string>{"{}"}; }

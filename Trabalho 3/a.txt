@@ -64,6 +64,12 @@ string lexema;
             return DOUBLE; }
 
 
+BAIT:
+
+let a = 1;
+let b = {};
+b.c = a++;
+b.d = b.c++;
 
 
 TESTES:
