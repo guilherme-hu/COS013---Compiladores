@@ -1,0 +1,20 @@
+Pilha na tabela de simbolos para definir escopo, ao entrar numa função, cria e usa variaveis internas, ao sair da função desempilha da ts 
+Olha pela ts mais interna, e vai expandindo pelas ts mais externas ate achar, se não achar é erro de compilação
+vector de map
+
+Closure -> capturar variavel local definida antes, mas que é usada deppis
+let m => (x) => (y) ==> x*y;
+let F = m(10);
+let G = m(5)
+let a = F(3) ==> 30 (salva para F o valor local 10)
+
+Após fim da função, limpar as coisas, como a ts criada (pop). Precisa só guardar o valor de retorno da função -> precisa ficar embaixo do registro de ativação
+a = F(3)
+|        F       |
+|----------------|
+|instrução de ret|
+|----------------|
+|valor de retorno|  -> ultima coisa que precisa sobrar
+|----------------|
+
+Registro de ativação em JS é um objeto, feito dinamimicamente em tempo de execução

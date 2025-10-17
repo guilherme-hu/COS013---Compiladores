@@ -64,6 +64,8 @@ string lexema;
             return DOUBLE; }
 
 
+
+
 TESTES:
 
 Incorrect program output

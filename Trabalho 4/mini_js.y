@@ -66,14 +66,16 @@ struct Simbolo {
   int coluna;
 };
 
-map< string, Simbolo > ts; // Tabela de símbolos
+// Tabela de símbolos
+vector< map< string, Simbolo > > ts = { { } }; 
+// .back() é o escopo atual
 
 Atributos declara_variavel( TipoDecl decl, Atributos atrib ){
   string nome_var = atrib.c[0];
 
   if (decl == Var){
-    if (ts.count(nome_var) > 0){
-      if (ts[nome_var].tipo != Var){
+    if (ts.back().count(nome_var) > 0){
+      if (ts.back()[nome_var].tipo != Var){
         yyerror("Variável já declarada com let ou var");
       }
       else {
@@ -82,12 +84,12 @@ Atributos declara_variavel( TipoDecl decl, Atributos atrib ){
       }
     }
   }
-  else if (ts.count(nome_var) > 0){
+  else if (ts.back().count(nome_var) > 0){
     yyerror("Variável já declarada");
   }
-  ts[nome_var].linha = atrib.linha;
-  ts[nome_var].coluna = atrib.coluna;
-  ts[nome_var].tipo = decl;
+  ts.back()[nome_var].linha = atrib.linha;
+  ts.back()[nome_var].coluna = atrib.coluna;
+  ts.back()[nome_var].tipo = decl;
 
   atrib.c = atrib.c + "&";
   return atrib;
@@ -125,7 +127,7 @@ string define_label( string prefixo ) {
 
 void verifica_uso( Atributos atrib ){
   string nome_var = atrib.c[0];
-  if (ts.count(nome_var) == 0){
+  if (ts.back().count(nome_var) == 0){
     fprintf( stderr, "Erro: a variável '%s' não foi declarada.\n", nome_var.c_str() );
     // fprintf( stderr, "Erro: a variável '%s' não foi declarada na linha %d, coluna %d.\n", nome_var.c_str(), atrib.linha, atrib.coluna );
     exit(1);
@@ -134,14 +136,11 @@ void verifica_uso( Atributos atrib ){
 
 void verifica_const( Atributos atrib ){
   string nome_var = atrib.c[0];
-    if (ts.count(nome_var) > 0 && ts[nome_var].tipo == Const){
+    if (ts.back().count(nome_var) > 0 && ts.back()[nome_var].tipo == Const){
     fprintf( stderr, "Erro: tentativa de modificar uma variável constante ('%s') na linha %d.\n", nome_var.c_str(), atrib.linha );
     exit(1);
   }
 }
-
-// verifica_se_existe
-// verifica_se_pode_modificar
 
 void print( vector<string> codigo ) {
   for( string s : codigo )
@@ -159,14 +158,14 @@ void print( vector<string> codigo ) {
 
 
 %right '=' MAIS_IGUAL MENOS_IGUAL
-%nonassoc OR AND
+%left OR
+%left AND
 %nonassoc IGUAL DIF
 %nonassoc '<' '>' ME_IG MA_IG
 %left '+' '-'
 %left '*' '/' '%'
-%left '[' '('
-%left '.' 
-%left MAIS_MAIS MENOS_MENOS
+
+%left '.' '['
 
 %%
 
@@ -182,9 +181,9 @@ CMD : DECL ';'
     | E ';' { $$.c = $1.c + "^"; }
     | CMD_IF
     //| CMD_FOR
-    | CMD_WHILE
+    /* | CMD_WHILE */
     | PRINT E ';' { $$.c = $2.c + "println" + "#"; }
-    | ';' { $$.clear(); } // comando vazio
+    | ';'
     ;
     
 DECL : LET LET_IDs { $$.c = $2.c; }
@@ -240,6 +239,7 @@ CMD_IF : IF '(' E ')' BLOCO
 
 BLOCO : CMD
       | '{' CMDs '}' { $$.c = $2.c; }
+      | '{' CMDs '}' ';' { $$.c = $2.c; }
       ;
 /* 
 CMD_FOR : FOR '(' SF ';' E ';' EF ')' BLOCO
@@ -284,9 +284,7 @@ LVALUEPROP : E '[' E ']' { $$.c = $1.c + $3.c; }
            ;
 
 // Operadores binários e atribuição
-E : LVALUE { $$.c = $1.c + "@"; } 
-  | LVALUEPROP { $$.c = $1.c + "[@]"; }
-  | LVALUE '=' E { verifica_uso( $1 ); $$.c = $1.c + $3.c + "="; }
+E : LVALUE '=' E { verifica_uso( $1 ); $$.c = $1.c + $3.c + "="; }
   | LVALUEPROP '=' E { verifica_uso( $1 ); $$.c = $1.c + $3.c + "[=]"; }
   | LVALUE MAIS_IGUAL E     { verifica_uso( $1 ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
   | LVALUE MENOS_IGUAL E    { verifica_uso( $1 ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
@@ -305,22 +303,19 @@ E : LVALUE { $$.c = $1.c + "@"; }
   | E '*' E { $$.c = $1.c + $3.c + "*"; }
   | E '/' E { $$.c = $1.c + $3.c + "/"; }
   | E '%' E { $$.c = $1.c + $3.c + "%"; }
-  | '-' E     { $$.c = "0" + $2.c + "-"; } // unário -
-  | '+' E     { $$.c = $2.c; } // unário +
   | F
   ;
 
-/* 
-P : MAIS_MAIS LVALUEPROP{$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+"}
-  | F
-  ; */
-
 // Operadores unários
-F : CDOUBLE
+F : LVALUE { $$.c = $1.c + "@"; } 
+  | LVALUEPROP { $$.c = $1.c + "[@]"; }
+  | CDOUBLE
   | CINT
   | CSTRING
   | LVALUE MAIS_MAIS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+" + "=" + "^"; }
   | LVALUE MENOS_MENOS {$$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
+  | '-' F     { $$.c = "0" + $2.c + "-"; } // unário -
+  | '+' F     { $$.c = $2.c; } // unário +
   | '(' E ')' { $$.c = $2.c; }
   | '[' ']' { $$.c = vector<string>{"[]"}; }
   | '{' '}' { $$.c = vector<string>{"{}"}; }

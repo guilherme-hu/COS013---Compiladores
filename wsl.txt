@@ -1,2 +1,5 @@
 cd /mnt/c/Users/guilh/OneDrive/VScode/Compiladores/'Trabalho 3' 
 
+
+yacc mini_js.y -Wcounterexamples
+-v 
