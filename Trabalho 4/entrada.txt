@@ -1,21 +1,23 @@
-let console = {};
+function f(x) { 
+  if( x % 2 == 0 ) { 
+    let x = 1;
 
-function exit( n ) {
-  'Codigo de erro: ' asm{print # undefined};
-  n asm{println # undefined};
-  0 asm{.};
+    function g() { 
+      {
+        return 3.1 + x++; 
+        1; 
+      }  
+    }
+
+    for( let i = 0; i < 5; i++ ) {     
+      g();
+    }
+    return g() + x;
+    let v;
+  }
+  else 
+    return x; 
 }
 
-function teste( a, b, c ) {
-  exit( b );
-}
-
-let a = "Saida: ";
-let b = 3.14;
-
-console.teste = {};
-console.teste.log = [
-] ;
-console.teste.log[1] = teste;
-
-console.teste.log[1]( a, b, "5" );
+let a = f(4);
+let b = f(3);

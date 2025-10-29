@@ -169,6 +169,8 @@ void print( vector<string> codigo ) {
 
 vector<string> funcoes; // Acumula o código de todas funções
 
+vector<int> alinhamento_return; // Pilha de alinhamento por função: topo guarda quantos blocos '{ }' estão abertos
+
 %}
 
 %token ID LET CONST VAR
@@ -207,7 +209,8 @@ CMD : DECL ';'
     | CMD_FOR
     | CMD_WHILE
     | ';' { $$.clear(); } // comando vazio
-    | '{' EMPILHA_TS CMDs '}'{ ts.pop_back(); $$.c = "<{" + $3.c + "}>"; }
+    | '{' EMPILHA_TS { if (!alinhamento_return.empty()) alinhamento_return.back()++; }  
+      CMDs '}' { if (!alinhamento_return.empty()) alinhamento_return.back()--; ts.pop_back(); $$.c = "<{" + $4.c + "}>"; }
     | CMD_FUNC 
     | CMD_RETURN
     | E ASM ';' 	{ $$.c = $1.c + $2.c + "^"; }
@@ -303,8 +306,9 @@ EMPILHA_TS : { ts.push_back( map< string, Simbolo >{} ); } // cria uma nova tabe
            ;
 
 CMD_FUNC : FUNCTION ID { $$ = declara_variavel( Var, $2, $2.linha, $2.coluna ); }
-          '(' EMPILHA_TS LISTA_PARAMs ')' '{' { ++in_func; } CMDs '}' 
+          '(' EMPILHA_TS LISTA_PARAMs ')' '{' { ++in_func; alinhamento_return.push_back(0); } CMDs '}' 
           { --in_func;
+            alinhamento_return.pop_back(); // Sai do contexto de alinhamento desta função
             string lbl_endereco_funcao = gera_label( "func_" + $2.c[0] );
             string definicao_lbl_endereco_funcao = ":" + lbl_endereco_funcao;
 
@@ -366,8 +370,25 @@ PARAM : ID {  $$.c = $1.c;
         }
       ;
 
-CMD_RETURN : RETURN E ';' { $$.c = $2.c + "'&retorno'" + "@" + "~"; }
-           | RETURN ';' { $$.c = vector<string>{"undefined"} + "@" + "'&retorno'" + "@" + "~"; }  
+CMD_RETURN : RETURN E ';'
+             { if (alinhamento_return.empty()) { 
+                 cerr << "Erro: 'return' fora de função." << endl; 
+                 exit(1); 
+               }
+               vector<string> pops;
+               for (int i = 0; i < alinhamento_return.back(); ++i) pops += "}>";
+               // avalia E, prepara '&retorno', fecha blocos e retorna
+               $$.c = $2.c + "'&retorno'" + "@" + pops + "~"; 
+             }
+           | RETURN ';'
+             { if (alinhamento_return.empty()) { 
+                 cerr << "Erro: 'return' fora de função." << endl; 
+                 exit(1); 
+               }
+               vector<string> pops;
+               for (int i = 0; i < alinhamento_return.back(); ++i) pops += "}>";
+               $$.c = vector<string>{"undefined"} + "@" + "'&retorno'" + "@" + pops + "~"; 
+             }  
            ;
 
 LVALUE : ID { checa_simbolo( $1.c[0], false ); $$.c = $1.c; }
