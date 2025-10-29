@@ -1,23 +1,19 @@
-function f(x) { 
-  if( x % 2 == 0 ) { 
-    let x = 1;
-
-    function g() { 
-      {
-        return 3.1 + x++; 
-        1; 
-      }  
-    }
-
-    for( let i = 0; i < 5; i++ ) {     
-      g();
-    }
-    return g() + x;
-    let v;
-  }
-  else 
-    return x; 
+function log( msg = 'Default!', pular_linha = f() ) {
+  if( pular_linha )
+    msg asm{println # undefined};
+  else
+    msg asm{print # undefined};
 }
 
-let a = f(4);
-let b = f(3);
+function f( a = f( 1 ) ) {
+  log( 'Parametro a: ', false ); log( ' ', false ); log( a, true ); 
+  if( a == true )
+    return false;
+  else
+    return a == 1;
+}
+
+log( f() );
+log( ' ', true );
+log( f( 2 ), true );
+let a = f();

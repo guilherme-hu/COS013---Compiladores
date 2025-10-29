@@ -306,16 +306,19 @@ EMPILHA_TS : { ts.push_back( map< string, Simbolo >{} ); } // cria uma nova tabe
            ;
 
 CMD_FUNC : FUNCTION ID { $$ = declara_variavel( Var, $2, $2.linha, $2.coluna ); }
-          '(' EMPILHA_TS LISTA_PARAMs ')' '{' { ++in_func; alinhamento_return.push_back(0); } CMDs '}' 
-          { --in_func;
+          '(' EMPILHA_TS { ++in_func; alinhamento_return.push_back(0); } LISTA_PARAMs ')' '{' CMDs '}'
+          {
+            --in_func;
             alinhamento_return.pop_back(); // Sai do contexto de alinhamento desta função
+
             string lbl_endereco_funcao = gera_label( "func_" + $2.c[0] );
             string definicao_lbl_endereco_funcao = ":" + lbl_endereco_funcao;
 
             $$.c = $2.c + "&" + $2.c + "{}"  + "=" + "'&funcao'" +
                   lbl_endereco_funcao + "[=]" + "^";
 
-            funcoes = funcoes + definicao_lbl_endereco_funcao + $6.c + $10.c +
+            // $7 = LISTA_PARAMs, $10 = CMDs (após inserir a mid-rule action)
+            funcoes = funcoes + definicao_lbl_endereco_funcao + $7.c + $10.c +
                       "undefined" + "@" + "'&retorno'" + "@"+ "~";
             ts.pop_back();
           } //5+8
@@ -333,7 +336,7 @@ PARAMs : PARAMs ',' PARAM
           if( $3.valor_default.size() > 0 ) {
              string lbl_fim_if = gera_label( "fim_default_if" );
              $$.c += $3.c + "@" + "undefined" + "@" + "==" +
-                      lbl_fim_if + "?" +
+                      "!" + lbl_fim_if + "?" +             // <-- acrescenta '!' aqui
                       $3.c + $3.valor_default + "=" + "^" +
                       define_label( lbl_fim_if );
            }
@@ -347,7 +350,7 @@ PARAMs : PARAMs ',' PARAM
                 string lbl_fim_if = gera_label( "fim_default_if" );
                 string def_lbl_fim_if = define_label( lbl_fim_if );
                 $$.c += $1.c + "@" + "undefined" + "@" + "==" +
-                          lbl_fim_if + "?" +
+                          "!" + lbl_fim_if + "?" +         // <-- e aqui
                           $1.c + $1.valor_default + "=" + "^" +
                           define_label( lbl_fim_if );
             }
@@ -404,12 +407,12 @@ LVALUEPROP : LVALUE '[' E ']'   { $$.c = $1.c + "@" + $3.c; }   // b[0]
 
 // Operadores binários e atribuição
 E : LVALUE { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "@"; } 
-  | LVALUEPROP { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "[@]"; }
+  | LVALUEPROP { $$.c = $1.c + "[@]"; }
   | LVALUE '=' E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $3.c + "="; }
-  | LVALUEPROP '=' E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $3.c + "[=]"; }
-  | LVALUE MAIS_IGUAL E     { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
-  | LVALUE MENOS_IGUAL E    { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
-  | LVALUEPROP MAIS_IGUAL E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "+" + "[=]"; }  // a[i] += e  => a[i] a[i] [@] e + [=]
+  | LVALUEPROP '=' E { $$.c = $1.c + $3.c + "[=]"; }
+  | LVALUE MAIS_IGUAL E   { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
+  | LVALUE MENOS_IGUAL E  { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
+  | LVALUEPROP MAIS_IGUAL E  { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "+" + "[=]"; }  // a[i] += e  => a[i] a[i] [@] e + [=]
   | LVALUEPROP MENOS_IGUAL E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "-" + "[=]"; }  // a[i] -= e  => a[i] a[i] [@] e - [=]
   | E '<' E { $$.c = $1.c + $3.c + "<"; }
   | E '>' E { $$.c = $1.c + $3.c + ">"; }
@@ -425,9 +428,11 @@ E : LVALUE { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "@"; }
   | E '/' E { $$.c = $1.c + $3.c + "/"; }
   | E '%' E { $$.c = $1.c + $3.c + "%"; }
   | '-' E     { $$.c = "0" + $2.c + "-"; } // unário -
-  | '+' E     { $$.c = $2.c; } // unário +
-  | MAIS_MAIS LVALUE { checa_simbolo( $1.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "+" + "="; }
-  | MENOS_MENOS LVALUE { checa_simbolo( $1.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "-" + "="; }
+  | '+' E     { $$.c = $2.c; }             // unário +
+  | MAIS_MAIS LVALUE { checa_simbolo( $2.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "+" + "="; }
+  | MENOS_MENOS LVALUE { checa_simbolo( $2.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "-" + "="; }
+  | MAIS_MAIS LVALUEPROP { $$.c = $2.c + $2.c + "[@]" + "1" + "+" + "[=]"; }
+  | MENOS_MENOS LVALUEPROP { $$.c = $2.c + $2.c + "[@]" + "1" + "-" + "[=]"; }
   | F
   ;
 
