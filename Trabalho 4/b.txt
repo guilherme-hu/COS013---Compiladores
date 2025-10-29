@@ -18,3 +18,803 @@ a = F(3)
 |----------------|
 
 Registro de ativação em JS é um objeto, feito dinamimicamente em tempo de execução
+
+
+O que precisamos colocar na nossa tabela de simbolos
+- Endereço de retorno
+- Parâmetros
+- Valor de retorno
+
+No JS, toda fução retorna um valor, se não tem valor, retorna undefined -> todo valor precisa ser desempilhado
+Se não escrever nenhum return dentro da função, precisamos empilhar undefined. se a função retorna alguma coisa, desempilha esse valor, caso contrario retorna undefined e desempilha. teste por semantica e não pela gramatica (IF)
+toda função, ao final dela, retorna undefined. se a função tiver algum return, ele ja retorna por esse return, se não tiver, esse return final salva -> dead code (codigo que nunca é executado). Só precisamos verificar o caso de return vazio
+
+JS não faz verificação de nummero e tipos dos parametros passados na função
+esses parametros são salvos no vetor "arguments" dentro do escopo dessa função. podemos usar arguments.length para ver por exemplo o numero de argumentos
+
+mdc(a,b){} =>
+
+mdc(){
+
+    a = arguments[0];
+    b = arguments[1]; -> feito automaticamente, faremos o mesmo -> contar parametros
+    ...
+    return 1;
+}
+
+Função é LET
+
+f['&funcao']
+colocaremos o codigo da função la para baixo, codigo de funções -> codigo principal em $$.c, e outro para funções
+e apontamos seu f['&funcao'] para esse endereço 
+codigo das funções vai ser uma variavel global que adicionaremos cada função
+
+resolução de endereço é de boas, pois como função é tratado com objeto, basta fazer atribuição normal
+res 36 60 2 mdc @ $ = ^
+mdc @ retorna &funcao
+6 60 2 mdc @ $ é o return da função
+
+
+RETURN
+quando entra em funcao, coloca $ que empilha escopo
+~ tira o registro de ativação
+porem, se tiver um bloco, ele cria o bloco com <{}> e o return tira apenas o bloco, sobrando o registro de ativação
+Para resolver isso, alinhamento é estatico, então podemos contar quantos blocos alinhados houveram
+
+'{' EMPILHA_TS CMDs '}'{ ts.pop_back(); $$.c = "<{" + $3.c + "}>"; }
+não basta inverter ~ e }>, modo de resolução recursivo
+
+criaremos uma variavel global pilha para contar os alinhamentos, para cada função -> alinhamento do return, quantos desalinhamentos o return precisa fazer -> cada funcao empilha, bloco dentro aumenta contador no topo da pilha, return desempilha
+
+vector<int> alinhamento_return
+esse vetor tambem serve para verificar casos de return dentro de bloco mas não dentro de função (não deve funcionar)
+se é zero, erro de cimpilação
+se for um, gera uma instrução de desempilha
+
+
+++ prefixado e posixado
+Para Lprop, precisa guardar no topo da pilha o valor para não repetir a soma de indice
+da para resolver por variavel local tambem
+
+ID ++  e   ++ ID-> não dao conflito
+. ID ++    e       ++ E . ID -> dá conflito pois o ++ no segundo deve ser ++(E.ID)
+E [ E ] ++
+
+Antes '.'?
+(E).
+funcao(args).
+ID.
+E[E]. -> antes de um array pode ter ID (ID[E]), outro array (ID[E][E]), outra função (F(ARGS)[E]), expressão com parenteses (não atrapalha, (E)[E]), string ('string'[2], pega o caracter no indice), numero (0[0], retorna undefined sempre), objeto e array puro ([1,2,3][1], retorna 2)
+faremos uma regra especifica para isso
+
+Função:
+ID()
+[]()
+.ID()
+(E)()
+
+criaremos um novo simbolo para resolver isso. enquanto for lvalueprop temos expectativas de que pode ser uma atribuição ou um ++
+
+LVP -> LVP.ID
+    | LVP[E]
+    | LPP(ARGS)
+    | ID
+    | 
+
+++ ID.ID[E]
+   |------|
+     LVP
+
+LVALUEPROP : LVALUEPROP '[' E ']' { $$.c = $1.c + $3.c; }
+           | LVALUEPROP '.' ID { $$.c = $1.c + $3.c; }
+           | F '[' E ']' { $$.c = $1.c + $3.c; }
+           | F '.' ID { $$.c = $1.c + $3.c; } 
+           ;
+
+
+Testes:
+
+function mdc(a,b){
+    if (b!=0){
+        return mdc(a,a%b);
+    }
+    else return a;
+}
+let x = 32, y = 24;
+print mdc(x,y);
+
+Test 1: #1 asm
+Test 2: #2 Blocos e variáveis
+Test 3: #3 Variável duplicada
+Test 4: #4 Escopo
+Test 5: #5 Escopo
+Test 7: #7 Função com parâmetros
+Test 8: #8 Função com parâmetros e argumentos terminando em vírgula
+Test 9: #9 Return dentro de bloco
+Test 10: #10 expressões com +=, ++ e --
+Test 11: #11 Função com parâmetros e var duplicada
+Test 14: #14 métodos
+Test 15: #15 argumentos
+Test 16: #16 Função com variáveis locais
+Test 18: #18 Função com parâmetros default
+Test 19: #19 Função com parâmetros default complicados
+Test 20: #20 Super teste
+
+Test 1: #1 asm
+Incorrect program output
+--- Input ---
+function log( msg ) {
+  msg asm{println # undefined};
+}
+
+let r = log( 'Hello, world!' );
+
+--- Program output ---
+=== Console ===
+Hello, world!
+=== Vars ===
+|{ log: { &funcao: ##; }; r: undefined; undefined: undefined; }|
+=== Pilha ===
+|r|
+
+--- Expected output (exact text)---
+=== Console ===
+Hello, world!
+=== Vars ===
+|{ log: { &funcao: ##; }; r: undefined; undefined: undefined; }|
+=== Pilha ===
+
+Test 2: #2 Blocos e variáveis
+Incorrect program output
+--- Input ---
+const a = 9;
+function log( msg ) { 
+  msg asm{println # undefined};
+}
+
+var c = [ 
+];
+(log)( c );
+{ let a = 3.1; }
+{ const a = 8;
+  let b = 7;
+  c = b; }
+var c = c+ c++;
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: ) ===
+=== Instrução: 21 ===
+=== Vars ===
+|{ a: 9; c: [ ]; log: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+=== Console ===
+[ ]
+=== Vars ===
+|{ a: 9; c: 14; log: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+
+Test 3: #3 Variável duplicada
+Incorrect program output
+--- Input ---
+let b, c;
+{ const a = 0;
+  var c;
+}
+let a = 8;
+if( a ) {[];}
+else {
+  let b, d = { };
+}
+let d;
+let a;
+
+--- Program output ---
+Erro: a variável 'a' ja foi declarada na linha 5.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+Erro: a variável 'a' já foi declarada na linha 5.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+Test 4: #4 Escopo
+Incorrect program output
+--- Input ---
+function print(x) { x asm{println # undefined};
+} 
+var a, b = [];
+const c = -1;
+print( c + c );
+(b)[0] = true;
+if( b[0] ) {
+  let b = { };
+  (b).m = 9;
+  print( b );
+  a = b.m;
+}
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: : ===
+=== Instrução: 4 ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+|syntax|
+|error|
+|Proximo|
+|a|
+
+--- Expected output (exact text)---
+=== Console ===
+-2
+{ m: 9; }
+=== Vars ===
+|{ a: 9; b: [ 0: true; ]; c: -1; print: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+
+Test 5: #5 Escopo
+Incorrect program output
+--- Input ---
+var a, b = [];
+const c = -1;
+b[0] = true;
+function print(x) { x asm{println # undefined};
+  0 asm{undefined .};
+  return 0;
+} 
+if( b[0] ) { let a = -1; {
+   let b = { };
+    b.m = 9;
+    print( b ); 
+  }
+  a = b;
+}
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: : ===
+=== Instrução: 4 ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+|syntax|
+|error|
+|Proximo|
+|a|
+
+--- Expected output (exact text)---
+=== Console ===
+{ m: 9; }
+=== Vars ===
+|{ a: undefined; b: [ 0: true; ]; c: -1; print: { &funcao: ##; }; undefined: undefined; }|
+|{ a: -1; }|
+|{ b: { m: 9; }; }|
+|{ &retorno: ##; arguments: [ 0: { m: 9; }; ]; x: { m: 9; }; }|
+=== Pilha ===
+|0|
+|undefined|
+
+Test 6: #6 Função sem parâmetros
+Incorrect program output
+--- Input ---
+let str = "hello";
+function valor() { return str + ", world"; }
+var a = valor();
+str = "HELLO";;;
+var b = valor
+(
+)
+;
+
+--- Program output ---
+=== Console ===
+=== Erro: Essa variável deveria ser um objeto com o endereço da função em '&funcao': valor ===
+=== Instrução: 20 ===
+=== Vars ===
+|{ a: undefined; str: hello; undefined: undefined; valor: { &funcao: ##; }; }|
+=== Pilha ===
+|a|
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ a: hello, world; b: HELLO, world; str: HELLO; undefined: undefined; valor: { &funcao: ##; }; }|
+=== Pilha ===
+
+
+Test 7: #7 Função com parâmetros
+Incorrect program output
+--- Input ---
+function sqr(x) { return x*x + y; }
+let y = 0.01, a = sqr( 5.2, 7 );
+
+--- Program output ---
+Erro: a variável 'y' não foi declarada.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ a: 27.05; sqr: { &funcao: ##; }; undefined: undefined; y: 0.01; }|
+=== Pilha ===
+
+Test 8: #8 Função com parâmetros e argumentos terminando em vírgula
+Incorrect program output
+--- Input ---
+function sqr(x,) { return x*x + y; }
+let y = 0.01, a = sqr( 5.2, 7, );
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: : ===
+=== Instrução: 4 ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+|syntax|
+|error|
+|Proximo|
+|a|
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ a: 27.05; sqr: { &funcao: ##; }; undefined: undefined; y: 0.01; }|
+=== Pilha ===
+
+Test 9: #9 Return dentro de bloco
+Incorrect program output
+--- Input ---
+
+function f(x) { 
+  if( x % 2 == 0 ) { 
+    let x = 1;
+
+    function g() { 
+      {
+        return 3.1 + x++; 
+        1; 
+      }  
+    }
+
+    for( let i = 0; i < 5; i++ ) {     
+      g();
+    }
+    return g() + x;
+    let v;
+  }
+  else 
+    return x; 
+}
+
+let a = f(4);
+let b = f(3);
+
+
+--- Program output ---
+=== Console ===
+=== Vars ===
+|{ a: 23.1; f: { &funcao: ##; }; undefined: undefined; }|
+|{ &retorno: ##; arguments: [ 0: 4; ]; x: 4; }|
+|{ g: { &funcao: ##; }; i: 5; x: 7; }|
+|{ }|
+|{ }|
+|{ }|
+|{ b: 3; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ a: 16.1; b: 3; f: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+
+Test 10: #10 expressões com +=, ++ e --
+Incorrect program output
+--- Input ---
+let x = 0;
+
+function f( a, b ) {
+  let y = a++ * --b;
+  x += ++a*10 + b---a++;
+
+  return y;
+}
+
+let y = [], i = 2;
+y[2] = 2;
+y[3] = 4;
+let c = f( 7, y[++y[i++]]-- );
+
+
+--- Program output ---
+Erro: a variável '--' não foi declarada.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ c: 21; f: { &funcao: xx; }; i: 3; undefined: undefined; x: 84; y: [ 0: undefined; 1: undefined; 2: 3; 3: 3; ]; }|
+=== Pilha ===
+
+Test 11: #11 Função com parâmetros e var duplicada
+Incorrect program output
+--- Input ---
+function f( x, y, z ) { 
+  let z;
+  return x*x + y;
+}
+let f( 5.2, 7 );
+
+--- Program output ---
+Erro: a variável 'z' ja foi declarada na linha 1.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+Erro: a variável 'z' já foi declarada na linha 1.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+Test 12: #12 mdc
+Incorrect program output
+--- Input ---
+function mdc( a, b ) { 
+  if( b == 0 ) 
+    return a;
+  else
+    return mdc( b, a % b );
+}
+
+let a = mdc( 24, 33, 8  );
+
+--- Program output ---
+=== Console ===
+=== Erro: Essa variável deveria ser um objeto com o endereço da função em '&funcao': mdc ===
+=== Instrução: 17 ===
+=== Vars ===
+|{ a: undefined; mdc: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+|a|
+|24|
+|33|
+|8|
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ a: 3; mdc: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+
+Test 13: #13 função sem valor de retorno
+Incorrect program output
+--- Input ---
+function teste( a, b ) { 
+  if( a > b ) 
+    return a;
+}
+
+let um = teste( 3, 4 ),
+    dois = teste( 4, 3 );
+
+--- Program output ---
+=== Console ===
+=== Erro: Essa variável deveria ser um objeto com o endereço da função em '&funcao': teste ===
+=== Instrução: 16 ===
+=== Vars ===
+|{ teste: { &funcao: ##; }; um: undefined; undefined: undefined; }|
+=== Pilha ===
+|um|
+|3|
+|4|
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ dois: 4; teste: { &funcao: ##; }; um: undefined; undefined: undefined; }|
+=== Pilha ===
+
+
+Test 14: #14 métodos
+Incorrect program output
+--- Input ---
+let console = { };
+let Number =  { 
+};
+
+function log( msg ) {
+  msg asm{println # undefined};
+}
+
+function number_to_string( msg ) {
+  msg asm{to_string # '&retorno' @ ~};
+};
+
+console.log = log;
+Number.toString = number_to_string;
+
+let a = "Saida: ";
+let b = 3.14;
+
+console.log( a + Number.toString( b ) );
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: : ===
+=== Instrução: 4 ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+|syntax|
+|error|
+|Proximo|
+|a|
+
+--- Expected output (text)---
+=== Console ===
+Saida: 3.14
+=== Vars ===
+|{ Number: { toString: { &funcao: ##; }; }; a: Saida: ; b: 3.14; console: { log: { &funcao: ##; }; }; log: { &funcao: ##; }; number_to_string: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+"
+
+Test 15: #15 argumentos
+Incorrect program output
+--- Input ---
+let console = {};
+
+function exit( n ) {
+  'Codigo de erro: ' asm{print # undefined};
+  n asm{println # undefined};
+  0 asm{.};
+}
+
+function teste( a, b, c ) {
+  exit( b );
+}
+
+let a = "Saida: ";
+let b = 3.14;
+
+console.teste = {};
+console.teste.log = [
+] ;
+console.teste.log[1] = teste;
+
+console.teste.log[1]( a, b, "5" );
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: : ===
+=== Instrução: 4 ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+|syntax|
+|error|
+|Proximo|
+|a|
+
+--- Expected output (exact text)---
+=== Console ===
+Codigo de erro: 3.14
+=== Vars ===
+|{ a: Saida: ; b: 3.14; console: { teste: { log: [ 0: undefined; 1: { &funcao: ##; }; ]; }; }; exit: { &funcao: ##; }; teste: { &funcao: ##; }; undefined: undefined; }|
+|{ &retorno: ##; a: Saida: ; arguments: [ 0: Saida: ; 1: 3.14; 2: 5; ]; b: 3.14; c: 5; }|
+|{ &retorno: ##; arguments: [ 0: 3.14; ]; n: 3.14; }|
+=== Pilha ===
+|0|
+
+Test 16: #16 Função com variáveis locais
+Incorrect program output
+--- Input ---
+function f( x ) {
+  let b = 5 * x;
+  let c = { };
+
+  c.num = b;
+  (c).arr = [];
+  (c.arr)[1] = 0;
+  return c ;
+}
+
+let res = f( 11 );
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: : ===
+=== Instrução: 4 ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+|syntax|
+|error|
+|Proximo|
+|a|
+
+--- Expected output (exact text)---
+=== Console ===
+=== Vars ===
+|{ f: { &funcao: ##; }; res: { arr: [ 0: undefined; 1: 0; ]; num: 55; }; undefined: undefined; }|
+=== Pilha ===
+
+Test 18: #18 Função com parâmetros default
+Incorrect program output
+--- Input ---
+
+function f( x = 9, y = 8.1 ) {
+  log( 'Parametros: ' ); log( x ); log( ' ' ); log( y, true ); 
+  return x + y;
+}
+
+function log( msg = 'Default!', pular_linha = false ) {
+  if( pular_linha )
+    msg asm{println # undefined};
+  else
+    msg asm{print # undefined};
+}
+
+log();
+log( '-', true );
+log( f(), true );
+log( 'F = ' + f(), true );
+let x = f(),
+    a = f( 1 ),
+    b = f( false, 8 ),
+    c = f( 1, 2 );
+
+
+--- Program output ---
+Erro: a variável 'true' não foi declarada.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+=== Console ===
+Default!-
+Parametros: 9 8.1
+17.1
+Parametros: 9 8.1
+Default!
+Parametros: 9 8.1
+Parametros: 1 8.1
+Parametros: false 8
+Parametros: 1 2
+=== Vars ===
+|{ a: 9.1; b: undefined; c: 3; f: { &funcao: ##; }; log: { &funcao: ##; }; undefined: undefined; x: 17.1; }|
+=== Pilha ===
+
+Test 19: #19 Função com parâmetros default complicados
+Incorrect program output
+--- Input ---
+function log( msg = 'Default!', pular_linha = f() ) {
+  if( pular_linha )
+    msg asm{println # undefined};
+  else
+    msg asm{print # undefined};
+}
+
+function f( a = f( 1 ) ) {
+  log( 'Parametro a: ', false ); log( ' ', false ); log( a, true ); 
+  if( a == true )
+    return false;
+  else
+    return a == 1;
+}
+
+log( f() );
+log( ' ', true );
+log( f( 2 ), true );
+let a = f();
+
+--- Program output ---
+Erro: a variável 'false' não foi declarada.
+=== Console ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+
+--- Expected output (exact text)---
+=== Console ===
+Parametro a:  1
+Parametro a:  true
+Parametro a:  1
+Parametro a:  true
+false 
+Parametro a:  2
+false
+Parametro a:  1
+Parametro a:  true
+=== Vars ===
+|{ a: false; f: { &funcao: ##; }; log: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===
+
+Test 20: #20 Super teste
+Incorrect program output
+--- Input ---
+function getNome( obj ) { return obj.nome; }
+
+function getClass( obj ) { return obj.class; }
+
+function criaAluno( nome, celular, email ) {
+  let aluno = {};
+
+  aluno.nome = nome;
+  aluno.celular = celular;
+  aluno.email = email;
+  aluno.super = prototipoAluno;
+  aluno.getNome = getNome;
+
+  return aluno;
+}
+
+function log( msg ) {
+  msg asm{println # undefined};
+}
+
+function invoke( obj, metodo ) {
+  if( toString( obj[metodo] ) == 'undefined' )
+    return obj.super[metodo]( obj.super );
+  else
+    return obj[metodo]( obj );
+}
+
+function toString( msg ) {
+  msg asm{to_string # '&retorno' @ ~};
+}
+
+let prototipoAluno = { };
+
+prototipoAluno.class = 'Classe Aluno';
+prototipoAluno.getClass = getClass;
+
+let joao = criaAluno( 'Joao', '123456', 'eu@aqui.com' );
+let maria = criaAluno( 'Maria', '123457', 'voce@la.com' );
+
+log( invoke( joao, 'getNome' ) );
+log( invoke( joao, 'getClass' ) );
+log( invoke( maria, 'getNome' ) );
+log( invoke( maria, 'getClass' ) );
+
+--- Program output ---
+=== Console ===
+=== Erro: Instrução inválida: : ===
+=== Instrução: 4 ===
+=== Vars ===
+|{ undefined: undefined; }|
+=== Pilha ===
+|syntax|
+|error|
+|Proximo|
+|a|
+
+--- Expected output (exact text)---
+=== Console ===
+Joao
+Classe Aluno
+Maria
+Classe Aluno
+=== Vars ===
+|{ criaAluno: { &funcao: ##; }; getClass: { &funcao: ##; }; getNome: { &funcao: ##; }; invoke: { &funcao: ##; }; joao: { celular: 123456; email: eu@aqui.com; getNome: { &funcao: ##; }; nome: Joao; super: { class: Classe Aluno; getClass: { &funcao: ##; }; }; }; log: { &funcao: ##; }; maria: { celular: 123457; email: voce@la.com; getNome: { &funcao: ##; }; nome: Maria; super: { class: Classe Aluno; getClass: { &funcao: ##; }; }; }; prototipoAluno: { class: Classe Aluno; getClass: { &funcao: ##; }; }; toString: { &funcao: ##; }; undefined: undefined; }|
+=== Pilha ===

@@ -10,7 +10,6 @@ using namespace std;
 
 int linha = 1, coluna = 1; 
 
-int in_func = 0; // Contador de níveis de função (para permitir referência a variáveis externas não declaradas)
 
 struct Atributos {
   vector<string> c; // Código
@@ -20,6 +19,8 @@ struct Atributos {
   int n_args = 0; // Número de argumentos em chamadas de função
   int contador = 0; // Contador de parâmetros
   vector<string> valor_default; // Coletar valores default de parâmetros
+
+  string endereco_funcao; // Usado apenas para definir o endereço da função na regra NOME_FUNCAO e CMD_FUNC
 
   void clear() {
     c.clear();
@@ -85,7 +86,7 @@ Atributos declara_variavel( TipoDecl decl, Atributos atrib, int linha, int colun
   if (decl == Var){
     if (ts.back().count(nome_var) > 0){
       if (ts.back()[nome_var].tipo != Var){
-         cerr <<  "Erro: a variável '" << nome_var << "' já foi declarada na linha " << ts.back()[nome_var].linha << "." << endl;
+         cerr <<  "Erro: a variável '" << nome_var << "' ja foi declarada na linha " << ts.back()[nome_var].linha << "." << endl;
          exit(1);
       }
       else {
@@ -95,7 +96,7 @@ Atributos declara_variavel( TipoDecl decl, Atributos atrib, int linha, int colun
     }
   }
   else if (ts.back().count(nome_var) > 0){
-    cerr << "Erro: a variável '" << nome_var << "' já foi declarada na linha " << ts.back()[nome_var].linha << "." << endl;
+    cerr << "Erro: a variável '" << nome_var << "' ja foi declarada na linha " << ts.back()[nome_var].linha << "." << endl;
     exit(1);
   }
   
@@ -139,21 +140,17 @@ string define_label( string prefixo ) {
 }
 
 void checa_simbolo( string nome, bool modificavel ) {
-  for( int i = (int)ts.size() - 1; i >= 0; --i ) {
-    auto& esc = ts[i];
-    auto it = esc.find(nome);
-    if (it != esc.end()) {
-      if (modificavel && it->second.tipo == Const) {
+  for( int i = ts.size() - 1; i >= 0; i-- ) {  
+    auto& atual = ts[i];
+    
+    if( atual.count( nome ) > 0 ) {
+      if( modificavel && atual[nome].tipo == Const ) {
         cerr << "Erro: tentativa de modificar uma variável constante ('" << nome << "')." << endl;
-        exit(1);
+        exit( 1 );     
       }
-      return;
+      else 
+        return;
     }
-  }
-
-  // Permite referência a variáveis externas ainda não declaradas quando dentro de função (leitura)
-  if (!modificavel && in_func > 0) {
-    return; // será resolvido em tempo de execução
   }
 
   cerr << "Erro: a variável '" << nome << "' não foi declarada." << endl;
@@ -167,22 +164,11 @@ void print( vector<string> codigo ) {
   cout << endl;  
 }
 
-vector<string> funcoes; // Acumula o código de todas funções
-
-// Função para registrar o parâmetro no escopo local sem gerar código
-void registra_parametro(const string& nome_var, int linha, int coluna) {
-    auto& topo = ts.back();
-    if (topo.count(nome_var) > 0) {
-        cerr << "Erro: o parâmetro '" << nome_var << "' já foi declarado neste escopo na linha " << topo[nome_var].linha << "." << endl;
-        exit(1);
-    }
-    // Parâmetros são tratados como 'let' para permitir modificação dentro da função.
-    topo[nome_var] = Simbolo{ Let, linha, coluna };
-}
+vector<string> codigo_funcoes; // Acumula o código de todas funções
 
 %}
 
-%token ID LET CONST VAR
+%token ID LET CONST VAR PRINT
 %token IF ELSE FOR WHILE 
 %token FUNCTION RETURN ASM
 %token TRUE FALSE
@@ -204,7 +190,7 @@ void registra_parametro(const string& nome_var, int linha, int coluna) {
 
 %%
 
-S : CMDs { print( resolve_enderecos( $1.c + "." + funcoes ) ); }
+S : CMDs { print( resolve_enderecos( $1.c + "." + codigo_funcoes ) ); }
   ;
 
 CMDs : CMD CMDs { $$.c = $1.c + $2.c; };
@@ -217,11 +203,12 @@ CMD : DECL ';'
     | CMD_IF
     | CMD_FOR
     | CMD_WHILE
+    | PRINT E ';' { $$.c = $2.c + "println" + "#"; }
     | ';' { $$.clear(); } // comando vazio
     | '{' EMPILHA_TS CMDs '}'{ ts.pop_back(); $$.c = "<{" + $3.c + "}>"; }
     | CMD_FUNC 
     | CMD_RETURN
-    | E ASM ';' 	{ $$.c = $1.c + $2.c + "^"; }
+    | E ASM ';' 	{ $$.c = $1.c + $2.c; }
     ;
     
 DECL : LET LET_IDs { $$.c = $2.c; }
@@ -313,25 +300,36 @@ CMD_WHILE : WHILE '(' E ')' CMD
 EMPILHA_TS : { ts.push_back( map< string, Simbolo >{} ); } // cria uma nova tabela de símbolos na pilha de tabelas
            ;
 
-CMD_FUNC : FUNCTION ID { $$ = declara_variavel( Var, $2, $2.linha, $2.coluna ); }
-          '(' EMPILHA_TS LISTA_PARAMs ')' '{' { ++in_func; } CMDs '}' 
-          { --in_func;
-            string lbl_endereco_funcao = gera_label( "func_" + $2.c[0] );
-            string definicao_lbl_endereco_funcao = ":" + lbl_endereco_funcao;
+CMD_FUNC
+  : FUNCTION NOME_FUNCAO { $$ = declara_variavel( Var, $2, $2.linha, $2.coluna ); }
+    '(' EMPILHA_TS LISTA_PARAMs ')' '{' CMDs '}'
+    {
+      string lbl_endereco_funcao = gera_label( "func_" + $2.c[0] );
+      string definicao_lbl_endereco_funcao = define_label( lbl_endereco_funcao );
 
-            $$.c = $2.c + "&" + $2.c + "{}"  + "=" + "'&funcao'" +
-                  lbl_endereco_funcao + "[=]" + "^";
+      // código da definição (armazenar referência)
+      $$.c = $2.c + "&" + $2.c + "{}" + "=" + "'&funcao'" +
+             lbl_endereco_funcao + "[=]" + "^";
 
-            funcoes = funcoes + definicao_lbl_endereco_funcao + $6.c + $10.c +
-                      "undefined" + "@" + "'&retorno'" + "@"+ "~";
-            ts.pop_back();
-          } //5+8
-          ;
+      // código da função propriamente dita
+      vector<string> corpo_funcao = vector<string>{definicao_lbl_endereco_funcao} + $8.c + "'&retorno'" + "@" + "~";
 
-LISTA_PARAMs : PARAMs 
+      codigo_funcoes += corpo_funcao;
+
+      ts.pop_back();
+    }
+  ;
+
+NOME_FUNCAO : ID { $$.endereco_funcao = gera_label( "func_" + $1.c[0] );
+                  $$.c = $1.c + "&" + $1.c + "{}"  + "=" + "'&funcao'" +
+                  $$.endereco_funcao + "[=]" + "^";
+}        
+
+LISTA_PARAMs : PARAMs ',' 
+             | PARAMs
              | { $$.clear(); }
              ;
-           
+/*            
 PARAMs : PARAMs ',' PARAM 
          { declara_variavel(Var, $3, $3.linha, $3.coluna); 
 
@@ -345,22 +343,23 @@ PARAMs : PARAMs ',' PARAM
                       define_label( lbl_fim_if );
            }
            $$.contador = $1.contador + $3.contador; }
-        | PARAMs ',' { $$.c = $1.c; $$.contador = $1.contador; }     
-        | PARAM { // a & a arguments @ 0 [@] = ^ 
-            declara_variavel( Var, $1, $1.linha, $1.coluna );
-            $$.c = $1.c + "&" + $1.c + "arguments" + "@" + "0" + "[@]" + "=" + "^"; 
-                    
-            if( $1.valor_default.size() > 0 ) {
-                string lbl_fim_if = gera_label( "fim_default_if" );
-                string def_lbl_fim_if = define_label( lbl_fim_if );
-                $$.c += $1.c + "@" + "undefined" + "@" + "==" +
-                          lbl_fim_if + "?" +
-                          $1.c + $1.valor_default + "=" + "^" +
-                          define_label( lbl_fim_if );
-            }
-            $$.contador = 1; 
-          }
-        ;
+           
+     | PARAM { // a & a arguments @ 0 [@] = ^ 
+        declara_variavel( Var, $1, $1.linha, $1.coluna );
+        $$.c = $1.c + "&" + $1.c + "arguments" + "@" + "0" + "[@]" + "=" + "^"; 
+                
+        if( $1.valor_default.size() > 0 ) {
+            string lbl_fim_if = gera_label( "fim_default_if" );
+            string def_lbl_fim_if = define_label( lbl_fim_if );
+            $$.c += $1.c + "@" + "undefined" + "@" + "==" +
+                      lbl_fim_if + "?" +
+                      $1.c + $1.valor_default + "=" + "^" +
+                      define_label( lbl_fim_if );
+        }
+        $$.contador = 1; 
+       }
+     ;
+     // se colocar vazio aqui, lista_args não pode ser vazio, e aqui aceitamos final com ;
      
 PARAM : ID {  $$.c = $1.c;      
         $$.valor_default.clear();
@@ -373,7 +372,15 @@ PARAM : ID {  $$.c = $1.c;
         $$.linha = $1.linha;
         $$.coluna = $1.coluna;
         }
-      ;
+      ; */
+
+PARAMs : PARAMs ',' ID '=' E {$$.contador = $3.contador + 1;} 
+        | PARAMs ',' ID {$$.contador = $3.contador + 1;} 
+        | ID '=' E {$$.contador = 0;} 
+        | ID {$$.contador = 0;}
+     ;
+     // se colocar vazio aqui, lista_args não pode ser vazio, e aqui aceitamos final com ;
+     
 
 CMD_RETURN : RETURN E ';' { $$.c = $2.c + "'&retorno'" + "@" + "~"; }
            | RETURN ';' { $$.c = vector<string>{"undefined"} + "@" + "'&retorno'" + "@" + "~"; }  
@@ -382,12 +389,8 @@ CMD_RETURN : RETURN E ';' { $$.c = $2.c + "'&retorno'" + "@" + "~"; }
 LVALUE : ID { checa_simbolo( $1.c[0], false ); $$.c = $1.c; }
        ;
 
-LVALUEPROP : LVALUE '[' E ']'   { $$.c = $1.c + "@" + $3.c; }   // b[0]
-           | LVALUE '.' ID      { $$.c = $1.c + "@"+ $3.c; }   // b.m 
-           | LVALUEPROP '[' E ']' { $$.c = $1.c + "[@]" + $3.c; }
-           | LVALUEPROP '.' ID { $$.c = $1.c + "[@]" + $3.c; }
-           | F '[' E ']' { $$.c = $1.c + $3.c; }
-           | F '.' ID { $$.c = $1.c + $3.c; } 
+LVALUEPROP : E '[' E ']' { $$.c = $1.c + $3.c; }
+           | E '.' ID { $$.c = $1.c + $3.c; }
            ;
 
 // Operadores binários e atribuição
@@ -398,7 +401,7 @@ E : LVALUE { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "@"; }
   | LVALUE MAIS_IGUAL E     { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
   | LVALUE MENOS_IGUAL E    { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
   | LVALUEPROP MAIS_IGUAL E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "+" + "[=]"; }  // a[i] += e  => a[i] a[i] [@] e + [=]
-  | LVALUEPROP MENOS_IGUAL E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "-" + "[=]"; }  // a[i] -= e  => a[i] a[i] [@] e - [=]
+  | LVALUEPROP MENOS_IGUAL E{ checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "-" + "[=]"; }  // a[i] -= e  => a[i] a[i] [@] e - [=]
   | E '<' E { $$.c = $1.c + $3.c + "<"; }
   | E '>' E { $$.c = $1.c + $3.c + ">"; }
   | E ME_IG E { $$.c = $1.c + $3.c + "<="; }
@@ -415,7 +418,7 @@ E : LVALUE { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "@"; }
   | '-' E     { $$.c = "0" + $2.c + "-"; } // unário -
   | '+' E     { $$.c = $2.c; } // unário +
   | MAIS_MAIS LVALUE { checa_simbolo( $1.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "+" + "="; }
-  | MENOS_MENOS LVALUE { checa_simbolo( $1.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "-" + "="; }
+  | MENOS_MENOS LVALUE {checa_simbolo( $1.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "-" + "="; }
   | F
   ;
 
@@ -428,29 +431,27 @@ F : CDOUBLE
   | LVALUE MENOS_MENOS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
   | LVALUEPROP MAIS_MAIS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "[@]" + $1.c + $1.c + "[@]" + "1" + "+" + "[=]" + "^"; }
   | LVALUEPROP MENOS_MENOS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "[@]" + $1.c + $1.c + "[@]" + "1" + "-" + "[=]" + "^"; }
-  | TRUE  { $$.c = vector<string>{"true"}; }
-  | FALSE { $$.c = vector<string>{"false"}; }
   | '(' E ')' { $$.c = $2.c; }
+  | '[' ']' { $$.c = vector<string>{"[]"}; }
   | '{' '}' { $$.c = vector<string>{"{}"}; }
-  | '[' ARGs ']' { $$.c = $2.c + "[]"; }
-  | CHAM_FUNC '(' ARGs ')'  { $$.c = $3.c + to_string($3.n_args) + $1.c + "$"; }
+  | E '(' LISTA_ARGs ')' { $$.c = $3.c + to_string( $3.n_args ) + $1.c + "$"; }
+  ;
+  
+LISTA_ARGs
+  : ARGs ','        { $$.c = $1.c; $$.n_args = $1.n_args; } // vírgula final aceita
+  | ARGs            { $$.c = $1.c; $$.n_args = $1.n_args; }
+  |                 { $$.clear(); $$.n_args = 0; }
   ;
 
-CHAM_FUNC : ID           { checa_simbolo($1.c[0], false); $$.c = $1.c + "@"; }
-          | LVALUEPROP   { $$.c = $1.c + "[@]"; }
-          | '(' E ')'    { $$.c = $2.c; }     // (log) retorna o rvalue do log
-          ;
+ARGs
+  : ARGs ',' E
+    { $$.c = $1.c + $3.c;
+      $$.n_args = $1.n_args + 1; }
+  | E
+    { $$.c = $1.c;
+      $$.n_args = 1; }
+  ;
 
-
-ARGs : E ',' ARGs
-       { $$.c = $1.c + $3.c;
-         $$.n_args = $3.n_args + 1; }
-     | E
-       { $$.c = $1.c;
-         $$.n_args = 1; }
-     | { $$.clear();
-         $$.n_args = 0; }
-     ;
 
 %%
 
