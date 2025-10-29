@@ -169,17 +169,6 @@ void print( vector<string> codigo ) {
 
 vector<string> funcoes; // Acumula o código de todas funções
 
-// Função para registrar o parâmetro no escopo local sem gerar código
-void registra_parametro(const string& nome_var, int linha, int coluna) {
-    auto& topo = ts.back();
-    if (topo.count(nome_var) > 0) {
-        cerr << "Erro: o parâmetro '" << nome_var << "' já foi declarado neste escopo na linha " << topo[nome_var].linha << "." << endl;
-        exit(1);
-    }
-    // Parâmetros são tratados como 'let' para permitir modificação dentro da função.
-    topo[nome_var] = Simbolo{ Let, linha, coluna };
-}
-
 %}
 
 %token ID LET CONST VAR
@@ -344,7 +333,7 @@ PARAMs : PARAMs ',' PARAM
                       $3.c + $3.valor_default + "=" + "^" +
                       define_label( lbl_fim_if );
            }
-           $$.contador = $1.contador + $3.contador; }
+           $$.contador = $1.contador + 1; }
         | PARAMs ',' { $$.c = $1.c; $$.contador = $1.contador; }     
         | PARAM { // a & a arguments @ 0 [@] = ^ 
             declara_variavel( Var, $1, $1.linha, $1.coluna );
@@ -366,12 +355,14 @@ PARAM : ID {  $$.c = $1.c;
         $$.valor_default.clear();
         $$.linha = $1.linha;
         $$.coluna = $1.coluna;
+        $$.contador = 1;   
       }
       | ID '=' E { // Código do IF
         $$.c = $1.c;
         $$.valor_default = $3.c;
         $$.linha = $1.linha;
         $$.coluna = $1.coluna;
+        $$.contador = 1; 
         }
       ;
 
