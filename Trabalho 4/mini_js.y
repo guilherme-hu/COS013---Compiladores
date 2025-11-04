@@ -21,6 +21,9 @@ struct Atributos {
   int contador = 0; // Contador de parâmetros
   vector<string> valor_default; // Coletar valores default de parâmetros
 
+  vector<string> esq; // Valor usado em LVP, para separar E[ E ].
+  vector<string> dir; // Valor usado em LVP, sempre variáveis temporárias
+
   void clear() {
     c.clear();
     valor_default.clear();
@@ -171,6 +174,11 @@ vector<string> funcoes; // Acumula o código de todas funções
 
 vector<int> alinhamento_return; // Pilha de alinhamento por função: topo guarda quantos blocos '{ }' estão abertos
 
+string gera_temp( string nome ) {
+  static int t = 0;
+  return string("temp_") + nome + to_string(++t);
+}
+
 %}
 
 %token ID LET CONST VAR
@@ -209,7 +217,7 @@ CMD : DECL ';'
     | CMD_FOR
     | CMD_WHILE
     | ';' { $$.clear(); } // comando vazio
-    | '{' EMPILHA_TS { if (!alinhamento_return.empty()) alinhamento_return.back()++; }  
+    | '{' EMPILHA_TS { if (!alinhamento_return.empty()) alinhamento_return.back()++; }  // Empilha escopo novo
       CMDs '}' { if (!alinhamento_return.empty()) alinhamento_return.back()--; ts.pop_back(); $$.c = "<{" + $4.c + "}>"; }
     | CMD_FUNC 
     | CMD_RETURN
@@ -307,8 +315,7 @@ EMPILHA_TS : { ts.push_back( map< string, Simbolo >{} ); } // cria uma nova tabe
 
 CMD_FUNC : FUNCTION ID { $$ = declara_variavel( Var, $2, $2.linha, $2.coluna ); }
           '(' EMPILHA_TS { ++in_func; alinhamento_return.push_back(0); } LISTA_PARAMs ')' '{' CMDs '}'
-          {
-            --in_func;
+          { --in_func;
             alinhamento_return.pop_back(); // Sai do contexto de alinhamento desta função
 
             string lbl_endereco_funcao = gera_label( "func_" + $2.c[0] );
@@ -397,23 +404,99 @@ CMD_RETURN : RETURN E ';'
 LVALUE : ID { checa_simbolo( $1.c[0], false ); $$.c = $1.c; }
        ;
 
-LVALUEPROP : LVALUE '[' E ']'   { $$.c = $1.c + "@" + $3.c; }   // b[0]
-           | LVALUE '.' ID      { $$.c = $1.c + "@"+ $3.c; }   // b.m 
-           | LVALUEPROP '[' E ']' { $$.c = $1.c + "[@]" + $3.c; }
-           | LVALUEPROP '.' ID { $$.c = $1.c + "[@]" + $3.c; }
-           | F '[' E ']' { $$.c = $1.c + $3.c; }
-           | F '.' ID { $$.c = $1.c + $3.c; } 
+LVALUEPROP : LVALUE '[' E ']'   { $$.c.clear(); $$.esq = $1.c + "@"; $$.dir = $3.c; }    // b[0]
+           | LVALUE '.' ID      { $$.c.clear(); $$.esq = $1.c + "@"; $$.dir = $3.c; }   // b.m 
+           | LVALUEPROP '[' E ']' { $$.c.clear(); $$.esq = $1.esq + $1.dir + "[@]"; $$.dir = $3.c; } 
+           | LVALUEPROP '.' ID    { $$.c.clear(); $$.esq = $1.esq + $1.dir + "[@]"; $$.dir = $3.c; } 
+           | F '[' E ']'          { $$.c.clear(); $$.esq = $1.c; $$.dir = $3.c; }; 
+           | F1 '.' ID            { $$.c.clear(); $$.esq = $1.c; $$.dir = $3.c; }
            ;
 
 // Operadores binários e atribuição
 E : LVALUE { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "@"; } 
-  | LVALUEPROP { $$.c = $1.c + "[@]"; }
+  | LVALUEPROP { $$.c = $1.esq + $1.dir + "[@]"; }
   | LVALUE '=' E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $3.c + "="; }
-  | LVALUEPROP '=' E { $$.c = $1.c + $3.c + "[=]"; }
+  | LVALUEPROP '=' E { $$.c = $1.esq + $1.dir + $3.c + "[=]"; }
   | LVALUE MAIS_IGUAL E   { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "+" + "="; } // a += e  => a a @ e + =
   | LVALUE MENOS_IGUAL E  { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "@" + $3.c + "-" + "="; } // a -= e  => a a @ e - =
-  | LVALUEPROP MAIS_IGUAL E  { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "+" + "[=]"; }  // a[i] += e  => a[i] a[i] [@] e + [=]
-  | LVALUEPROP MENOS_IGUAL E { checa_simbolo( $1.c[0], true ); $$.c = $1.c + $1.c + "[@]" + $3.c + "-" + "[=]"; }  // a[i] -= e  => a[i] a[i] [@] e - [=]
+  | LVALUEPROP MAIS_IGUAL E  {
+      string tB = gera_temp("esq"), tI = gera_temp("dir");
+      $$.c = vector<string>{
+        "<{",
+          tB, "&", tB
+      } + $1.esq + vector<string>{
+          "=", "^",
+          tI, "&", tI
+      } + $1.dir + vector<string>{
+          "=", "^",
+          // par para [=]
+          tB, "@", tI, "@",
+          // par para ler valor atual
+          tB, "@", tI, "@", "[@]"
+      } + $3.c + vector<string>{
+          "+",
+          "[=]",
+        "}>"
+      };
+    }
+  | LVALUEPROP MENOS_IGUAL E {
+      string tB = gera_temp("esq"), tI = gera_temp("dir");
+      $$.c = vector<string>{
+        "<{",
+          tB, "&", tB
+      } + $1.esq + vector<string>{
+          "=", "^",
+          tI, "&", tI
+      } + $1.dir + vector<string>{
+          "=", "^",
+          // par para [=]
+          tB, "@", tI, "@",
+          // par para ler valor atual
+          tB, "@", tI, "@", "[@]"
+      } + $3.c + vector<string>{
+          "-",
+          "[=]",
+        "}>"
+      };
+    }
+  | MAIS_MAIS LVALUE { checa_simbolo( $2.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "+" + "="; }
+  | MENOS_MENOS LVALUE { checa_simbolo( $2.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "-" + "="; }
+  | MAIS_MAIS LVALUEPROP
+    { string tB = gera_temp("esq"), tI = gera_temp("dir");
+      $$.c = vector<string>{
+        "<{",
+          tB, "&", tB
+      } + $2.esq + vector<string>{
+          "=", "^",
+          tI, "&", tI
+      } + $2.dir + vector<string>{
+          "=", "^",
+          // par para [=]
+          tB, "@", tI, "@",
+          // novo valor = a[i] + 1
+          tB, "@", tI, "@", "[@]", "1", "+",
+          "[=]",
+        "}>"
+      };
+    }
+  | MENOS_MENOS LVALUEPROP
+    { string tB = gera_temp("esq"), tI = gera_temp("dir");
+      $$.c = vector<string>{
+        "<{",
+          tB, "&", tB
+      } + $2.esq + vector<string>{
+          "=", "^",
+          tI, "&", tI
+      } + $2.dir + vector<string>{
+          "=", "^",
+          // par para [=]
+          tB, "@", tI, "@",
+          // novo valor = a[i] - 1
+          tB, "@", tI, "@", "[@]", "1", "-",
+          "[=]",
+        "}>"
+      };
+    }
   | E '<' E { $$.c = $1.c + $3.c + "<"; }
   | E '>' E { $$.c = $1.c + $3.c + ">"; }
   | E ME_IG E { $$.c = $1.c + $3.c + "<="; }
@@ -429,32 +512,57 @@ E : LVALUE { checa_simbolo( $1.c[0], false ); $$.c = $1.c + "@"; }
   | E '%' E { $$.c = $1.c + $3.c + "%"; }
   | '-' E     { $$.c = "0" + $2.c + "-"; } // unário -
   | '+' E     { $$.c = $2.c; }             // unário +
-  | MAIS_MAIS LVALUE { checa_simbolo( $2.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "+" + "="; }
-  | MENOS_MENOS LVALUE { checa_simbolo( $2.c[0], true ); $$.c = $2.c + $2.c + "@" + "1" + "-" + "="; }
-  | MAIS_MAIS LVALUEPROP { $$.c = $2.c + $2.c + "[@]" + "1" + "+" + "[=]"; }
-  | MENOS_MENOS LVALUEPROP { $$.c = $2.c + $2.c + "[@]" + "1" + "-" + "[=]"; }
   | F
   ;
 
-
-// Operadores unários
-F : CDOUBLE
-  | CINT
-  | CSTRING
-  | LVALUE MAIS_MAIS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+" + "=" + "^"; }
-  | LVALUE MENOS_MENOS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
-  | LVALUEPROP MAIS_MAIS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "[@]" + $1.c + $1.c + "[@]" + "1" + "+" + "[=]" + "^"; }
-  | LVALUEPROP MENOS_MENOS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "[@]" + $1.c + $1.c + "[@]" + "1" + "-" + "[=]" + "^"; }
-  | TRUE  { $$.c = vector<string>{"true"}; }
-  | FALSE { $$.c = vector<string>{"false"}; }
-  | '(' E ')' { $$.c = $2.c; }
-  | '{' '}' { $$.c = vector<string>{"{}"}; }
-  | '[' ARGs ']' { $$.c = $2.c + "[]"; }
-  | CHAM_FUNC '(' ARGs ')'  { $$.c = $3.c + to_string($3.n_args) + $1.c + "$"; }
+F : F1
+  | F2
   ;
 
+F1 : CDOUBLE
+   | CSTRING
+   | TRUE  { $$.c = vector<string>{"true"}; }
+   | FALSE { $$.c = vector<string>{"false"}; }
+   | '(' E ')' { $$.c = $2.c; }
+   | '[' ARGs ']' { $$.c = $2.c + "[]"; }
+   | CHAM_FUNC '(' ARGs ')'  { $$.c = $3.c + to_string($3.n_args) + $1.c + "$"; }
+   ;
+
+F2 : CINT
+   | LVALUE MAIS_MAIS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "+" + "=" + "^"; }
+   | LVALUE MENOS_MENOS { checa_simbolo( $1.c[0], true ); $$.c = $1.c + "@" + $1.c + $1.c + "@" + "1" + "-" + "=" + "^"; } 
+   | LVALUEPROP MAIS_MAIS 
+      { string esq = gera_temp("esq"); 
+        string dir = gera_temp("dir");
+        
+        checa_simbolo( $1.c[0], true ); 
+        $$.c = vector<string>{"<{"} 
+             + esq + "&" + esq + $1.esq + "=" + "^"
+              + dir + "&" + dir + $1.dir + "=" + "^"
+              + esq + "@" + dir + "@" + "[@]" 
+              + esq + "@" + dir + "@"
+              + esq + "@" + dir + "@" + "[@]" 
+              + "1" + "+" + "[=]" + "^" + "}>"; 
+      }
+   | LVALUEPROP MENOS_MENOS 
+      { string esq = gera_temp("esq"); 
+        string dir = gera_temp("dir");
+        
+        checa_simbolo( $1.c[0], true ); 
+        $$.c = vector<string>{"<{"} 
+              + esq + "&" + esq + $1.esq + "=" + "^"
+              + dir + "&" + dir + $1.dir + "=" + "^"
+              + esq + "@" + dir + "@" + "[@]" 
+              + esq + "@" + dir + "@"
+              + esq + "@" + dir + "@" + "[@]" 
+              + "1" + "-" + "[=]" + "^" + "}>"; 
+      }
+   | '{' '}' { $$.c = vector<string>{"{}"}; }
+   ;
+
+
 CHAM_FUNC : ID           { checa_simbolo($1.c[0], false); $$.c = $1.c + "@"; }
-          | LVALUEPROP   { $$.c = $1.c + "[@]"; }
+          | LVALUEPROP   { $$.c = $1.esq + $1.dir + "[@]"; }
           | '(' E ')'    { $$.c = $2.c; }     // (log) retorna o rvalue do log
           ;
 

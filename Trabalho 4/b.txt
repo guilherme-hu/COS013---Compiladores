@@ -112,7 +112,26 @@ LVALUEPROP : LVALUEPROP '[' E ']' { $$.c = $1.c + $3.c; }
            ;
 
 
-Testes:
+Tratando: y[++y[i++]]--
+( j[i++] )++
+cada i++ coloca a variavel i na pilha 3 vezes
+o incremento de j[i++] colocacará i++ 3 vezes na pilha, o que o incrementará muito mais do que deveria
+Para tratar isso, teremos que criar variáveis temporárias. essas variavies terão que ter nome, como o label e com um contador
+
+gera_temp -> cria 
+var = gera_temp -> temp_3 -> qualquer nome não usado para não ter colisão
+
+atributo v, para armazenar id e E
+
+
+a = M[ F() ]++; -> chama função 3 vezes, deveria chamar so uma vez
+
+E [ E ]
+T1  T2 -> variaveis temporarias
+precisamos disso em: ++, --, +=, -=, *=, /= e LVP
+
+
+Testes prof:
 
 function mdc(a,b){
     if (b!=0){
@@ -122,6 +141,51 @@ function mdc(a,b){
 }
 let x = 32, y = 24;
 print mdc(x,y);
+
+======================
+let a = [];
+let b = 1, c;
+
+a[1]=10;
+c = a[b++]++
+======================
+temp1 = b
+b += 1
+temp2 = a[temp1]
+a[temp1] += 1
+c = temp2
+----------------------
+c => 10
+a[1] => 11
+b => 2
+
+a & a [] ^
+b & b 1 = ^ c &
+a @ 1 10 [=] ^
+
+-> c a  b @  b b@ 1 + = ^
+        |--| |----------|
+      vartemp      b+=1
+
+c a temp1 & temp1 b @ = ^
+b b @ 1 + = ^
+temp2 & temp2 a temp1 @ [@] = ^
+              |-----------|
+a temp1 @ a temp @ [@] 1 [=] ^
+c temp2 @ = ^
+
+
+let b = 0;
+let c =[];
+
+c[b++] = 7;
+
+c[0] = 2;
+
+let d = c [b++]++;
+
+
+TESTES MOODLE:
 
 Test 1: #1 asm
 Test 2: #2 Blocos e variáveis
@@ -149,14 +213,6 @@ function log( msg ) {
 
 let r = log( 'Hello, world!' );
 
---- Program output ---
-=== Console ===
-Hello, world!
-=== Vars ===
-|{ log: { &funcao: ##; }; r: undefined; undefined: undefined; }|
-=== Pilha ===
-|r|
-
 --- Expected output (exact text)---
 === Console ===
 Hello, world!
@@ -181,14 +237,6 @@ var c = [
   c = b; }
 var c = c+ c++;
 
---- Program output ---
-=== Console ===
-=== Erro: Instrução inválida: ) ===
-=== Instrução: 21 ===
-=== Vars ===
-|{ a: 9; c: [ ]; log: { &funcao: ##; }; undefined: undefined; }|
-=== Pilha ===
-
 --- Expected output (exact text)---
 === Console ===
 [ ]
@@ -210,13 +258,6 @@ else {
 }
 let d;
 let a;
-
---- Program output ---
-Erro: a variável 'a' ja foi declarada na linha 5.
-=== Console ===
-=== Vars ===
-|{ undefined: undefined; }|
-=== Pilha ===
 
 --- Expected output (exact text)---
 Erro: a variável 'a' já foi declarada na linha 5.
@@ -240,18 +281,6 @@ if( b[0] ) {
   print( b );
   a = b.m;
 }
-
---- Program output ---
-=== Console ===
-=== Erro: Instrução inválida: : ===
-=== Instrução: 4 ===
-=== Vars ===
-|{ undefined: undefined; }|
-=== Pilha ===
-|syntax|
-|error|
-|Proximo|
-|a|
 
 --- Expected output (exact text)---
 === Console ===

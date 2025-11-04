@@ -15,7 +15,7 @@ lex.yy.c: mini_js.l
 	lex mini_js.l
 	
 y.tab.c: mini_js.y
-	yacc mini_js.y -v -Wcounterexamples
+	yacc mini_js.y -v
 	
 clean: 
 	rm -f lex.yy.c y.tab.c mini_js codigo

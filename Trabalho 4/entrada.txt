@@ -1,19 +1,16 @@
-function log( msg = 'Default!', pular_linha = f() ) {
-  if( pular_linha )
-    msg asm{println # undefined};
-  else
-    msg asm{print # undefined};
+let x = 0;
+
+function f( a, b ) {
+  let y = a++ * --b;
+  x += ++a*10 + b---a++;
+
+  return y;
 }
 
-function f( a = f( 1 ) ) {
-  log( 'Parametro a: ', false ); log( ' ', false ); log( a, true ); 
-  if( a == true )
-    return false;
-  else
-    return a == 1;
-}
+let y = [], i = 2;
+y[2] = 2;
+y[3] = 4;
+let c;
+{ c = f( 7, y[++y[i++]]-- ); }
 
-log( f() );
-log( ' ', true );
-log( f( 2 ), true );
-let a = f();
+
