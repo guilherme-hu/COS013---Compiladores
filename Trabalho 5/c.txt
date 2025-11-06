@@ -1,0 +1,114 @@
+Captura
+{
+let y = 10;
+let F = x => x*y;
+let c = F(10);
+} -> usa o y dentro do escopo
+
+se for objeto simples (int, double), vai ser copia
+se for struct (objeto com campos ou array), usamos referencia
+-> No JS, var e let são diferentes, sendo var uma referencia, mas desncosideraremos isso pois a mdp não possui referencias e é complicado
+-> NÃO USAR VAR NO JS
+
+{
+let y = 10;
+let F = x => x*y;  <== y'=10 (essa é a captura)
+let c = F(10);
+y = 11 (continua usando y'=10)
+}
+
+A captura faz parte da função
+
+let F = (x) { return y => x*y; }
+G = F(10); <-- x=10
+G(2) => 20
+h = F(5)   <-- x=5
+h(2) => 10
+
+G:
+| '&funcao': ____
+| 'captura': {x:10}
+
+se não encontrar variavel em 'captura', ela é global. ocorre captura se estiver dentro do mesmo escopo
+-/-> olhar cada ts em ordem do escopo, se não encontrar, usa global
+temos criar um escopo so para captura, e podem existir mais de uma para uma função
+
+
+Ex:
+>> function foo (){
+    let x=15;
+    return y => y*x;
+}
+<- undefined
+>> let f = foo();
+<- undefined
+>> f(8)
+<- 120
+>> x = 9
+<- 9
+>> f(8)
+<- 120  <== não muda resposta pois x foi capturado pelo escopo
+>> f = y => y*w;
+<- function f(y)
+>> f(9)
+<- ERRO, w não definido
+>> w = 8
+<- 8
+>> f(9)
+<- 72  <== usa o valor da variavel global w para isso, se mudar w, paras proximas chamadas de f resultado muda
+
+Ex2:
+>> let x = 10
+<- undefined
+>> function foo (){
+    return y => y*x;
+}
+<- undefined
+>> h = foo();
+-< function foo(y)
+>> h(9)
+<- 90
+>> x = 11
+<- 11
+>> h(9)
+<- 99
+
+Ex3:
+let f = function(x) { 
+    return (y) => x*y;   // captura.x = x
+}          |---------| -> expressão lambda vira função*; dentro do codigo dessa function, precisamos fazer a captura
+
+
+let v2 = f(2);
+// v2 = {'&funcao': XX, captura: {x:2} }
+
+let v5 = f(5);
+// v5 = {'&funcao': XX, captura: {x:5} } -> quando chamar essa função, empilha o valor da captura
+
+* let f = function(x) { 
+    return function(y){
+        return x*y*h;   // captura.x = x
+    } -> verifica todos os escopos ate a TS global, se encontrar variavel necessaria faz captura, se chegar ao TS global não captura, e requer variavel global
+}          
+
+codigo de captura: Sempre define campo captura para todo tipo de função, mesmo sendo vazio ou não
+
+
+
+Função anônima
+mesma estrutura de function, mas é uma EXPRESSÃO
+[<=] diferença para o [=] é que para 'a[b]=c', [=] coloca c no topo da pilha e [<=] coloca a no topo da pilha
+Ex: 'a& a [] = 0 1 [=] .' -> 1 fica no topo da pilha
+    'a& a [] = 0 1 [=] .' -> [0:1] fica no topo da pilha
+
+let c = {a:1, nome:2}
+c & c {} = a 1 [=] ^ c @ nome 2 [=]
+c & c {} = a 1 [<=] nome 2 [<=]
+-/-> poupa o trabalho de ficar empilhando c
+
+let x = 3; // x& x 3 = ^
+f = y => y*x // f& f {} '&funcao' XX [<=] captura {} x x@ [<=] [<=] = ^
+-/-> se x não estivesse definido, daria erro de execução
+-/-> só gera o trecho de captura se o x aparecer em algum escopo (TS até o global) -> captura {} x x@ [<=] [<=] = ^
+
+Loop de length -2 até o 0 da TS até o global para fazer a captura -> function 'devo_capturar'

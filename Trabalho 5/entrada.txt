@@ -1,0 +1,16 @@
+let x = 0;
+
+function f( a, b ) {
+  let y = a++ * --b;
+  x += ++a*10 + b---a++;
+
+  return y;
+}
+
+let y = [], i = 2;
+y[2] = 2;
+y[3] = 4;
+let c;
+{ c = f( 7, y[++y[i++]]-- ); }
+
+
